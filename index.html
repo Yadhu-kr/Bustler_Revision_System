@@ -42,7 +42,7 @@
       <div class="header-actions">
         <div class="status-badge" id="api-status-badge">
           <div class="status-dot" id="status-dot"></div>
-          <span id="status-text">Grok-3 API</span>
+          <span id="status-text">Groq / Llama-3.3</span>
         </div>
         <button class="settings-btn" id="toggle-settings" title="API Configuration">
           <!-- Cog icon -->
@@ -66,10 +66,10 @@
             <path
               d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
-          Grok Integration Configuration
+          Groq Integration Configuration
         </div>
         <div class="settings-row">
-          <label for="api-key-input">xAI API Key (Bearer Token)</label>
+          <label for="api-key-input">Groq API Key (server-side)</label>
           <div class="input-with-action">
             <input type="password" id="api-key-input" class="settings-input" placeholder="YOUR_GROK_API_KEY">
             <button class="settings-save-btn" id="save-api-key">Save</button>
@@ -186,6 +186,16 @@
             <button class="template-pill" id="random-feedback-btn" style="flex: 1;">
               <span>🎲</span> Random Feedback
             </button>
+          </div>
+        </div>
+
+        <!-- Resume by Token (W3 fix: session recovery when localStorage is cleared) -->
+        <div class="templates-section" id="resume-token-section">
+          <div class="templates-label">Resume Existing Brief</div>
+          <p class="assignment-subtitle">Lost your session? Paste your brief token below to resume tracking.</p>
+          <div class="input-with-action" style="max-width: 480px;">
+            <input type="text" id="resume-token-input" class="text-input" placeholder="Paste your brief access token here">
+            <button class="btn btn-secondary" id="resume-token-btn" style="padding: 8px 16px; font-size: 13px; width: auto; white-space: nowrap;">Resume</button>
           </div>
         </div>
 

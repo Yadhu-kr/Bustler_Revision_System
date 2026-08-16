@@ -9,7 +9,7 @@ const API_BASE = window.location.protocol === 'file:'
 // Application State Engine
 const state = {
   currentStep: 1,
-  apiKey: localStorage.getItem('bustler_grok_key') || DEFAULT_API_KEY,
+  apiKey: DEFAULT_API_KEY,
   isSimulated: false,
   rawFeedback: '',
   currentBrief: null,
@@ -264,7 +264,11 @@ const elements = {
   providerStatusLabel: document.getElementById('provider-status-label'),
   requestFurtherRevisionBtn: document.getElementById('request-further-revision-btn'),
   concludeCloseBtn: document.getElementById('conclude-close-btn'),
-  concludedDashboardBtn: document.getElementById('concluded-dashboard-btn')
+  concludedDashboardBtn: document.getElementById('concluded-dashboard-btn'),
+
+  // Resume by Token (W3)
+  resumeTokenInput: document.getElementById('resume-token-input'),
+  resumeTokenBtn: document.getElementById('resume-token-btn')
 };
 
 // Initialize UI
@@ -367,6 +371,11 @@ function init() {
   elements.requestFurtherRevisionBtn.addEventListener('click', handleRequestFurtherRevision);
   elements.concludeCloseBtn.addEventListener('click', handleConcludeClose);
   elements.concludedDashboardBtn.addEventListener('click', resetToStart);
+
+  // Resume by Token (W3)
+  if (elements.resumeTokenBtn) {
+    elements.resumeTokenBtn.addEventListener('click', handleResumeByToken);
+  }
 
   // Restore state if a brief is already in progress/sent
   const storedBrief = localStorage.getItem('bustler_approved_brief');
@@ -471,11 +480,10 @@ function toggleSettingsDrawer() {
   elements.settingsPanel.classList.toggle('open');
 }
 
-// Save key manually
+// Save key manually (key is now managed server-side; this only updates local UI state)
 function saveApiKey() {
   const val = elements.apiKeyInput.value.trim();
   state.apiKey = val || DEFAULT_API_KEY;
-  localStorage.setItem('bustler_grok_key', state.apiKey);
   elements.apiKeyInput.value = state.apiKey;
   
   // Temporary button state change to show success
@@ -501,7 +509,7 @@ function updateStatusBadge() {
     elements.statusText.innerText = 'Simulated Mode';
   } else {
     elements.statusDot.classList.remove('simulated');
-    elements.statusText.innerText = 'Grok-3 API';
+    elements.statusText.innerText = 'Groq / Llama-3.3';
   }
 }
 
@@ -588,7 +596,7 @@ async function generateBriefFlow(isRegenerating = false) {
         await new Promise(resolve => setTimeout(resolve, 1500));
         parsedBrief = simulateBrief(state.rawFeedback);
       } else {
-        parsedBrief = await fetchGrokBrief(state.rawFeedback);
+        parsedBrief = await callBackendGenerateBrief(state.rawFeedback);
       }
       
       // Override category and priority from user selections in Step 1
@@ -612,84 +620,14 @@ async function generateBriefFlow(isRegenerating = false) {
   }
 }
 
-async function fetchGrokBrief(feedback) {
-  const selectedCategory = state.selectedCategory || '';
-  const categoryInstruction = selectedCategory
-    ? `The service category is already known: "${selectedCategory}". Use this exact category. Do not guess or change it.`
-    : `Infer the most likely service category from the customer's wording only.`;
-
-  const systemPrompt = `You are Bustler's revision interpreter.
-
-Your task is to convert a customer's informal revision message into a professional provider-facing revision brief.
-
-Follow these rules exactly:
-
-RULE 1 - CATEGORY
-${categoryInstruction}
-
-RULE 2 - WRITE A PROFESSIONAL SUMMARY
-Rewrite the customer's feedback as a single professional sentence using industry-standard terminology appropriate to the service category.
-Do NOT quote, paraphrase, or repeat the customer's exact words.
-Do NOT include phrases like "the client said" or "based on feedback".
-Instead, translate the intent into professional language that a skilled provider in this category would immediately understand.
-For example, if a customer says "the colors look weird", write something like "The current color palette requires refinement to align with brand guidelines."
-Preserve the customer's meaning but elevate the language.
-Do not invent details that were not mentioned.
-
-RULE 3 - BUILD THE CHECKLIST
-Write 2 to 4 checklist items.
-Each item must come directly from the customer's message but rephrased in professional category-specific language.
-Describe what needs attention, clarification, correction, or revision.
-Do not add generic filler items.
-Do not include implementation steps the customer did not ask for.
-
-RULE 4 - PRIORITY
-Only assign a priority if the customer's own wording clearly signals urgency or severity.
-If the customer does not clearly signal urgency, set priority to "Not specified".
-Never guess or infer priority from your own judgment alone.
-
-  Return only valid JSON with this exact shape:
-  {"category":"...","summary":"...","checklist":["...","..."],"priority":"High|Medium|Low|Not specified"}`;
-  
-  const payload = {
-    model: "llama-3.3-70b-versatile",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: feedback }
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.3
-  };
-
-  const keyToUse = state.apiKey || DEFAULT_API_KEY;
-
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+async function callBackendGenerateBrief(feedback) {
+  const response = await fetch(`${API_BASE}/generate`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${keyToUse}`
-    },
-    body: JSON.stringify(payload)
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedback, category: state.selectedCategory, priority: state.selectedPriority })
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    let errorData;
-    try {
-      errorData = JSON.parse(errorText);
-    } catch(e) {}
-    
-    const message = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-    throw new Error(message);
-  }
-
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) {
-    throw new Error("Empty response returned from Grok endpoint.");
-  }
-
-  return parseGrokOutput(text);
+  if (!response.ok) throw new Error("Failed to communicate with backend service.");
+  return await response.json();
 }
 
 async function beginClarificationFlow() {
@@ -711,100 +649,29 @@ async function beginClarificationFlow() {
 }
 
 async function fetchClarificationQuestions(feedback, category, round, previousAnswers) {
-  const systemPrompt = `You are Bustler's clarification assistant.
-
-The user's feedback is too vague to create a provider-ready revision brief.
-The service category is already known: "${category}". Do NOT ask any question about which field, type of service, or category this belongs to.
-Generate exactly 5 short, practical clarification questions for the client.
-
-Rules:
-- Do NOT ask about the service category or type of work — it is already known.
-- The questions must help identify the actual issue within the ${category} category.
-- Focus on symptoms, affected deliverable area, expected outcome, visible example, and severity.
-- Avoid technical jargon unless it naturally matches the category.
-- Each question must be one sentence.
-- If this is not the first round, ask a different set of questions from the previous round.
-
-Return only valid JSON:
-{"questions":["...","...","...","...","..."]}`;
-
-  const userPrompt = JSON.stringify({
-    raw_feedback: feedback,
-    likely_category: category,
-    round,
-    previous_answers: previousAnswers
+  const response = await fetch(`${API_BASE}/clarify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedback, category, round, previousAnswers })
   });
-
-  const response = await postToGrok(systemPrompt, userPrompt);
-  const clean = extractJsonText(response);
-  const parsed = JSON.parse(clean);
-  return Array.isArray(parsed.questions) ? parsed.questions.slice(0, 5) : generateClarificationQuestions(feedback, category, round);
+  if (!response.ok) {
+    throw new Error('Failed to fetch clarification questions from backend.');
+  }
+  const data = await response.json();
+  return Array.isArray(data.questions) ? data.questions.slice(0, 5) : generateClarificationQuestions(feedback, category, round);
 }
 
 async function fetchCandidateIssue(feedback, category, answers) {
-  const systemPrompt = `You are Bustler's revision interpreter.
-
-You have the client's original feedback and their answers to clarification questions.
-Write one short professional issue statement that describes what the client most likely wants revised.
-
-Rules:
-- Preserve meaning without inventing facts.
-- Be specific when the answers are specific.
-- Do not prescribe the fix.
-- Keep it to 1 or 2 sentences.
-
-Return only valid JSON:
-{"issue":"..."}`;
-
-  const userPrompt = JSON.stringify({
-    raw_feedback: feedback,
-    category,
-    clarification_answers: answers
-  });
-
-  const response = await postToGrok(systemPrompt, userPrompt);
-  const clean = extractJsonText(response);
-  const parsed = JSON.parse(clean);
-  return parsed.issue || buildCandidateIssue(state.rawFeedback, category, answers);
-}
-
-async function postToGrok(systemPrompt, userContent) {
-  const payload = {
-    model: "llama-3.3-70b-versatile",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userContent }
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.3
-  };
-
-  const keyToUse = state.apiKey || DEFAULT_API_KEY;
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const response = await fetch(`${API_BASE}/candidate-issue`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${keyToUse}`
-    },
-    body: JSON.stringify(payload)
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedback, category, answers })
   });
-
   if (!response.ok) {
-    const errorText = await response.text();
-    let errorData;
-    try {
-      errorData = JSON.parse(errorText);
-    } catch (e) {}
-    const message = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-    throw new Error(message);
+    throw new Error('Failed to fetch candidate issue from backend.');
   }
-
   const data = await response.json();
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) {
-    throw new Error('Empty response returned from Grok endpoint.');
-  }
-  return text;
+  return data.issue || buildCandidateIssue(state.rawFeedback, category, answers);
 }
 
 function extractJsonText(text) {
@@ -1397,7 +1264,7 @@ async function handleClarificationConfirm() {
       parsedBrief = buildBriefFromClarification();
     } else {
       try {
-        parsedBrief = await fetchGrokBrief(enrichedFeedback);
+        parsedBrief = await callBackendGenerateBrief(enrichedFeedback);
         parsedBrief.summary = parsedBrief.summary || state.clarification.candidateIssue;
       } catch (apiErr) {
         console.warn('API call failed during final brief generation, falling back to local generation:', apiErr.message);
@@ -1572,6 +1439,66 @@ function backToEdit() {
 }
 
 // Step 2 Action Approved -> Step 3 (Creates Brief via API)
+// ---------------------------------------------------------------------------
+// Resume by Token (W3 fix) — recover session from a known brief token
+// ---------------------------------------------------------------------------
+async function handleResumeByToken() {
+  const tokenInput = elements.resumeTokenInput;
+  const token = tokenInput ? tokenInput.value.trim() : '';
+  if (!token) {
+    alert('Please paste a valid brief access token.');
+    return;
+  }
+
+  syncSessionInputs();
+  const userId = state.session.currentUserId;
+  if (!userId) {
+    alert('Enter your session user ID in Settings before resuming.');
+    elements.settingsPanel.classList.add('open');
+    elements.currentUserIdInput.focus();
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(token)}`, {
+      headers: { 'X-User-Id': userId }
+    });
+
+    if (res.status === 403) {
+      alert('Access denied — your user ID does not match this brief.');
+      return;
+    }
+    if (res.status === 404) {
+      alert('Brief not found — double-check the token.');
+      return;
+    }
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP ${res.status}`);
+    }
+
+    const brief = await res.json();
+
+    // Restore local state
+    state.currentBriefToken = token;
+    state.currentBrief = brief;
+    state.rawFeedback = brief.rawFeedback || '';
+    state.selectedCategory = brief.category || '';
+    state.selectedPriority = brief.priority || '';
+    localStorage.setItem('bustler_active_token', token);
+    localStorage.setItem('bustler_approved_brief', JSON.stringify(brief));
+
+    // Jump to tracking view
+    syncStep1UI();
+    changeStep(3);
+    startStep3Polling();
+    updateStep3Status();
+
+  } catch (err) {
+    console.error('[RESUME BY TOKEN ERROR]', err);
+    alert(`Could not resume brief: ${err.message}`);
+  }
+}
+
 async function approveBrief() {
   if (!state.currentBrief) return;
 

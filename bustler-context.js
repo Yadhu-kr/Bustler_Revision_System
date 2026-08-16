@@ -11,6 +11,24 @@
     return typeof value === 'string' && value.trim() ? value.trim() : '';
   }
 
+  /**
+   * Returns true when running on localhost or file:// (dev mode).
+   * In production, URL-param identity is disabled for security.
+   */
+  function isLocalDev() {
+    try {
+      const host = global.location.hostname;
+      return (
+        global.location.protocol === 'file:' ||
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '0.0.0.0'
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
   function getParams() {
     return new URLSearchParams(global.location.search);
   }
@@ -47,8 +65,21 @@
   }
 
   function resolveSession(defaultRole) {
-    const params = getParams();
     const bootstrap = getBootstrapContext();
+    const hasBootstrap = Object.keys(bootstrap).length > 0;
+
+    // In production, ONLY use BUSTLER_CONTEXT (injected by the authenticated parent platform).
+    // URL params are allowed ONLY in local dev and when BUSTLER_CONTEXT is absent.
+    const allowUrlParams = !hasBootstrap && isLocalDev();
+
+    const params = allowUrlParams ? getParams() : new URLSearchParams();
+
+    if (allowUrlParams && (params.get('user_id') || params.get('userId'))) {
+      console.warn(
+        '[BustlerContext] ⚠️ Using URL-param identity — dev-only fallback. ' +
+        'In production, inject window.BUSTLER_CONTEXT from an authenticated session.'
+      );
+    }
 
     const session = {
       currentUserId:

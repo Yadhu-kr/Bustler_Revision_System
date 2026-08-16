@@ -43,12 +43,19 @@ gcloud services enable \
 
 # 3. Build & Deploy to Cloud Run using Source Deploy
 echo "🔨 Building container image and deploying to Cloud Run..."
+if [ -z "$API_SECRET" ]; then
+  echo "⚠️  Warning: API_SECRET is not set. Generating a random one for this deploy."
+  API_SECRET=$(openssl rand -hex 32)
+  echo "   Generated API_SECRET: ${API_SECRET}"
+  echo "   Save this value — you'll need it to access the API."
+fi
+
 gcloud run deploy "$SERVICE_NAME" \
   --source . \
   --dockerfile backend/Dockerfile \
   --region "$REGION" \
-  --allow-unauthenticated \
-  --set-env-vars GCP_PROJECT_ID="$PROJECT_ID"
+  --no-allow-unauthenticated \
+  --set-env-vars GCP_PROJECT_ID="$PROJECT_ID",API_SECRET="$API_SECRET"
 
 echo ""
 echo "✅ Deployment Complete!"

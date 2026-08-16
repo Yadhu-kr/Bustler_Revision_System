@@ -112,8 +112,8 @@ async function init() {
   // Initial fetch
   await fetchBriefDetails();
 
-  // Start real-time polling (every 3 seconds)
-  pollTimer = setInterval(fetchBriefDetails, 3000);
+  // Start real-time polling (every 10 seconds — reduced from 3s for cost efficiency)
+  pollTimer = setInterval(fetchBriefDetails, 10000);
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +268,7 @@ function renderBrief(brief) {
   els.priority.innerText = priority;
 
   // Summary
-  els.summary.innerHTML = formatInlineMarkdown(brief.summary || '—');
+  els.summary.textContent = brief.summary || '—';
 
   // Checklist
   const completedIndices = brief.completedIndices || [];
@@ -283,12 +283,20 @@ function renderBrief(brief) {
       const isChecked = completedIndices.includes(idx);
       if (isChecked) item.classList.add('checked');
 
-      item.innerHTML = `
-        <input type="checkbox" id="prov-chk-${idx}" class="provider-checklist-checkbox" ${isChecked ? 'checked' : ''}>
-        <label for="prov-chk-${idx}" class="provider-checklist-text">${formatInlineMarkdown(change)}</label>
-      `;
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `prov-chk-${idx}`;
+      checkbox.className = 'provider-checklist-checkbox';
+      checkbox.checked = isChecked;
 
-      const checkbox = item.querySelector('input');
+      const label = document.createElement('label');
+      label.htmlFor = `prov-chk-${idx}`;
+      label.className = 'provider-checklist-text';
+      label.textContent = change;
+
+      item.appendChild(checkbox);
+      item.appendChild(label);
+
       checkbox.addEventListener('change', () => {
         if (checkbox.checked) {
           item.classList.add('checked');
@@ -373,6 +381,8 @@ function applyStatus(status) {
     els.statusBadge.innerText = 'Completed';
     els.actionRow.style.display = 'none';
     els.completedBanner.style.display = 'flex';
+    // W2 fix: stop polling — brief is in terminal state
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   } else if (status === 'concluded') {
     els.stepReceived.classList.add('done');
     els.line1.classList.add('filled');
@@ -383,6 +393,8 @@ function applyStatus(status) {
     els.statusBadge.innerText = 'Concluded';
     els.actionRow.style.display = 'none';
     els.concludedBanner.style.display = 'flex';
+    // W2 fix: stop polling — brief is in terminal state
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
 }
 
