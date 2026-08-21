@@ -1,19 +1,29 @@
-// Keep empty by default so secrets are not committed to source control.
-const DEFAULT_API_KEY = '';
-
 // Dynamic API Endpoint (supports file:// and http:// origins)
 const API_BASE = window.location.protocol === 'file:' 
   ? 'http://localhost:8080/api/briefs' 
   : '/api/briefs';
 
+// Real-time cross-tab synchronization channel
+let syncChannel = null;
+try {
+  syncChannel = new BroadcastChannel('bustler_sync');
+  syncChannel.onmessage = (event) => {
+    if (event.data && event.data.type === 'BRIEF_UPDATED') {
+      if (state.currentStep === 3) {
+        updateStep3Status();
+      }
+    }
+  };
+} catch (_) {}
+
 // Application State Engine
 const state = {
   currentStep: 1,
-  apiKey: DEFAULT_API_KEY,
-  isSimulated: false,
+  isSimulated: localStorage.getItem('bustler_simulate') === 'true',
   rawFeedback: '',
   currentBrief: null,
   currentBriefToken: null,
+  isRevisionLoop: false,
   selectedCategory: '',
   selectedPriority: '',
   session: {
@@ -192,12 +202,11 @@ const elements = {
   backToDashboardBtn: document.getElementById('back-to-dashboard-btn'),
   progressBarFill: document.getElementById('progress-bar-fill'),
   
-  // Settings Elements
+  // Settings & Theme Elements
   toggleSettings: document.getElementById('toggle-settings'),
   settingsPanel: document.getElementById('settings-panel'),
-  apiKeyInput: document.getElementById('api-key-input'),
-  saveApiKeyBtn: document.getElementById('save-api-key'),
-  simulateModeCheckbox: document.getElementById('simulate-mode-checkbox'),
+  themeToggleBtn: document.getElementById('theme-toggle-btn'),
+
   currentUserIdInput: document.getElementById('current-user-id-input'),
   statusDot: document.getElementById('status-dot'),
   statusText: document.getElementById('status-text'),
@@ -221,7 +230,6 @@ const elements = {
   loadingCard: document.getElementById('brief-loading-card'),
   errorCard: document.getElementById('brief-error-card'),
   errorMessageText: document.getElementById('error-message-text'),
-  errorConfigureKey: document.getElementById('error-configure-key'),
   errorSimulateBtn: document.getElementById('error-simulate-btn'),
   briefDisplayContainer: document.getElementById('brief-display-container'),
   clarificationFlowContainer: document.getElementById('clarification-flow-container'),
@@ -264,20 +272,15 @@ const elements = {
   providerStatusLabel: document.getElementById('provider-status-label'),
   requestFurtherRevisionBtn: document.getElementById('request-further-revision-btn'),
   concludeCloseBtn: document.getElementById('conclude-close-btn'),
-  concludedDashboardBtn: document.getElementById('concluded-dashboard-btn'),
-
-  // Resume by Token (W3)
-  resumeTokenInput: document.getElementById('resume-token-input'),
-  resumeTokenBtn: document.getElementById('resume-token-btn')
+  concludedDashboardBtn: document.getElementById('concluded-dashboard-btn')
 };
 
 // Initialize UI
 function init() {
   hydrateSessionContext();
 
-  // Setup Initial Settings values
-  elements.apiKeyInput.value = state.apiKey;
-  elements.simulateModeCheckbox.checked = state.isSimulated;
+  // Setup Initial Settings & Theme
+  initTheme();
   elements.currentUserIdInput.value = state.session.currentUserId;
   elements.providerIdInput.value = state.session.assignedProviderId;
   elements.productIdInput.value = state.session.productId;
@@ -291,13 +294,17 @@ function init() {
   elements.providerIdInput.addEventListener('input', syncSessionInputs);
   elements.productIdInput.addEventListener('input', syncSessionInputs);
 
+  // Custom Select-1 Dropdown Component
+  initCustomSelect();
+
   // Field-select (category) dropdown listener
   elements.fieldSelect.addEventListener('change', () => {
     state.selectedCategory = elements.fieldSelect.value;
     updateGenerateButtonState();
   });
 
-  // Priority buttons listener
+  // Priority buttons listener with animated sliding pill
+  initSlidingTabs();
   document.querySelectorAll('.priority-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       // Remove active from all priority buttons
@@ -305,6 +312,7 @@ function init() {
       // Set active on clicked
       btn.classList.add('active');
       state.selectedPriority = btn.getAttribute('data-priority');
+      updateSlidingTabs(btn, false);
       updateGenerateButtonState();
     });
   });
@@ -332,18 +340,14 @@ function init() {
 
   // Settings Drawer toggling
   elements.toggleSettings.addEventListener('click', toggleSettingsDrawer);
-  elements.saveApiKeyBtn.addEventListener('click', saveApiKey);
-  elements.simulateModeCheckbox.addEventListener('change', toggleSimulateMode);
+  if (elements.themeToggleBtn) {
+    elements.themeToggleBtn.addEventListener('click', toggleTheme);
+  }
+
   
   // Error recovery helpers
-  elements.errorConfigureKey.addEventListener('click', () => {
-    elements.settingsPanel.classList.add('open');
-    elements.apiKeyInput.focus();
-    elements.apiKeyInput.scrollIntoView({ behavior: 'smooth' });
-  });
   elements.errorSimulateBtn.addEventListener('click', () => {
     state.isSimulated = true;
-    elements.simulateModeCheckbox.checked = true;
     localStorage.setItem('bustler_simulate', 'true');
     updateStatusBadge();
     generateBriefFlow();
@@ -371,11 +375,6 @@ function init() {
   elements.requestFurtherRevisionBtn.addEventListener('click', handleRequestFurtherRevision);
   elements.concludeCloseBtn.addEventListener('click', handleConcludeClose);
   elements.concludedDashboardBtn.addEventListener('click', resetToStart);
-
-  // Resume by Token (W3)
-  if (elements.resumeTokenBtn) {
-    elements.resumeTokenBtn.addEventListener('click', handleResumeByToken);
-  }
 
   // Restore state if a brief is already in progress/sent
   const storedBrief = localStorage.getItem('bustler_approved_brief');
@@ -480,48 +479,117 @@ function toggleSettingsDrawer() {
   elements.settingsPanel.classList.toggle('open');
 }
 
-// Save key manually (key is now managed server-side; this only updates local UI state)
-function saveApiKey() {
-  const val = elements.apiKeyInput.value.trim();
-  state.apiKey = val || DEFAULT_API_KEY;
-  elements.apiKeyInput.value = state.apiKey;
-  
-  // Temporary button state change to show success
-  const originalText = elements.saveApiKeyBtn.innerText;
-  elements.saveApiKeyBtn.innerText = 'Saved!';
-  elements.saveApiKeyBtn.style.backgroundColor = 'var(--success-green)';
-  setTimeout(() => {
-    elements.saveApiKeyBtn.innerText = originalText;
-    elements.saveApiKeyBtn.style.backgroundColor = '';
-  }, 1500);
-  updateStatusBadge();
+// ----------------------------------------------------
+// Toast Notification Engine
+// ----------------------------------------------------
+function showToast(message, type = 'success', title = '', duration = 4000) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast-card toast-${type}`;
+
+  const icons = {
+    success: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+    info: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+    warning: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+    copy: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
+  };
+
+  const defaultTitles = {
+    success: 'Success',
+    info: 'Information',
+    warning: 'Notice',
+    copy: 'Copied to Clipboard'
+  };
+
+  toast.innerHTML = `
+    <div class="toast-icon">${icons[type] || icons.info}</div>
+    <div class="toast-content">
+      <div class="toast-title">${title || defaultTitles[type] || 'Notification'}</div>
+      <div class="toast-message">${message}</div>
+    </div>
+    <button class="toast-close" aria-label="Close">&times;</button>
+    <div class="toast-progress"></div>
+  `;
+
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+
+  const removeToast = () => {
+    toast.classList.remove('show');
+    toast.classList.add('hide');
+    setTimeout(() => {
+      if (toast.parentElement) toast.remove();
+    }, 300);
+  };
+
+  toast.querySelector('.toast-close').addEventListener('click', removeToast);
+  setTimeout(removeToast, duration);
 }
 
-function toggleSimulateMode() {
-  state.isSimulated = elements.simulateModeCheckbox.checked;
-  localStorage.setItem('bustler_simulate', state.isSimulated ? 'true' : 'false');
-  updateStatusBadge();
+// ----------------------------------------------------
+// Dark / Light Mode Theme Management
+// ----------------------------------------------------
+function initTheme() {
+  const saved = localStorage.getItem('bustler_theme');
+  const isDark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  updateThemeUI(isDark);
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('bustler_theme', newTheme);
+  updateThemeUI(newTheme === 'dark');
+}
+
+function updateThemeUI(isDark) {
+
+  if (elements.themeToggleBtn) {
+    elements.themeToggleBtn.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+  }
 }
 
 function updateStatusBadge() {
   if (state.isSimulated) {
     elements.statusDot.classList.add('simulated');
-    elements.statusText.innerText = 'Simulated Mode';
+    elements.statusText.innerText = 'Mock Simulation';
   } else {
     elements.statusDot.classList.remove('simulated');
-    elements.statusText.innerText = 'Groq / Llama-3.3';
+    elements.statusText.innerText = 'Bustler AI';
   }
 }
 
 // Toggle raw accordion open state
 function toggleRawAccordion() {
-  const isOpen = elements.rawAccordionContent.style.maxHeight && elements.rawAccordionContent.style.maxHeight !== '0px';
+  const isOpen = elements.rawAccordionContent.classList.contains('open');
   if (isOpen) {
+    elements.rawAccordionContent.classList.remove('open');
     elements.rawAccordionContent.style.maxHeight = '0px';
-    elements.rawArrow.style.transform = 'rotate(0deg)';
+    if (elements.rawArrow) {
+      elements.rawArrow.style.transform = 'rotate(0deg)';
+    }
   } else {
-    elements.rawAccordionContent.style.maxHeight = elements.rawAccordionContent.scrollHeight + 'px';
-    elements.rawArrow.style.transform = 'rotate(180deg)';
+    // Populate text if needed
+    const rawContent = state.rawFeedback || (elements.feedbackInput ? elements.feedbackInput.value.trim() : '') || 'No raw feedback available.';
+    elements.rawTextBlock.innerText = rawContent;
+    elements.rawAccordionContent.classList.add('open');
+    const scrollH = elements.rawAccordionContent.scrollHeight;
+    elements.rawAccordionContent.style.maxHeight = (scrollH > 0 ? scrollH + 30 : 250) + 'px';
+    if (elements.rawArrow) {
+      elements.rawArrow.style.transform = 'rotate(180deg)';
+    }
   }
 }
 
@@ -532,10 +600,12 @@ function changeStep(targetStep) {
   const updateDOM = () => {
     // Toggle Steps visibility
     Object.keys(elements.steps).forEach(s => {
+      const el = elements.steps[s];
       if (parseInt(s) === targetStep) {
-        elements.steps[s].classList.add('active');
+        el.classList.add('active');
+        el.classList.add('animate-reveal');
       } else {
-        elements.steps[s].classList.remove('active');
+        el.classList.remove('active');
       }
     });
 
@@ -558,6 +628,14 @@ function changeStep(targetStep) {
     // Update progress bar percentage width
     const widthPercent = (targetStep === 1) ? 33.33 : (targetStep === 2 ? 66.66 : 100);
     elements.progressBarFill.style.width = widthPercent + '%';
+
+    // Smooth scroll down to the current active step container
+    setTimeout(() => {
+      const activeCard = elements.steps[targetStep];
+      if (activeCard) {
+        activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 80);
   };
 
   // Use View Transitions API if supported
@@ -1366,11 +1444,19 @@ function showBriefView() {
   elements.errorCard.style.display = 'none';
   elements.briefDisplayContainer.style.display = 'flex';
   elements.clarificationFlowContainer.style.display = 'none';
+  elements.briefDisplayContainer.classList.add('animate-reveal');
   elements.briefDisplayContainer.querySelectorAll(':scope > .step-title-section, :scope > .back-link-wrapper, :scope > .brief-scroll-container, :scope > .action-row').forEach(node => {
     if (!node.closest('#clarification-flow-container')) {
       node.style.display = '';
     }
   });
+
+  // Smooth scroll down to brief display
+  setTimeout(() => {
+    elements.briefDisplayContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
+
+  showToast('Revision brief created! Review your checklist below.', 'success', 'Brief Ready');
 }
 
 // Render parsed brief structures to Step 2 page
@@ -1398,38 +1484,33 @@ function renderBrief(brief) {
   // Set summary text parsing markdown inline
   elements.briefSummaryText.innerHTML = formatInlineMarkdown(brief.summary);
 
-  // Build checklist
+  // Build checklist (read-only for customer review)
   elements.briefChangesList.innerHTML = '';
-  brief.changes.forEach((change, idx) => {
+  brief.changes.forEach((change) => {
     const item = document.createElement('div');
-    item.className = 'checklist-item';
+    item.className = 'customer-checklist-item';
     
     item.innerHTML = `
-      <div class="checklist-checkbox-wrapper">
-        <input type="checkbox" id="change-chk-${idx}" class="checklist-checkbox">
+      <div class="checklist-bullet">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
       </div>
-      <label for="change-chk-${idx}" class="checklist-text">${formatInlineMarkdown(change)}</label>
+      <div class="checklist-text">${formatInlineMarkdown(change)}</div>
     `;
-    
-    // Add checking visual line strike toggling
-    const checkbox = item.querySelector('input');
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) {
-        item.classList.add('completed');
-      } else {
-        item.classList.remove('completed');
-      }
-    });
 
     elements.briefChangesList.appendChild(item);
   });
 
   // Set Raw customer feedback to see exactly what they typed
-  elements.rawTextBlock.innerText = state.rawFeedback;
+  elements.rawTextBlock.innerText = state.rawFeedback || brief.rawFeedback || brief.rawText || (elements.feedbackInput ? elements.feedbackInput.value.trim() : '') || '—';
   
   // Reset raw accordion view heights
+  elements.rawAccordionContent.classList.remove('open');
   elements.rawAccordionContent.style.maxHeight = '0px';
-  elements.rawArrow.style.transform = 'rotate(0deg)';
+  if (elements.rawArrow) {
+    elements.rawArrow.style.transform = 'rotate(0deg)';
+  }
 }
 
 // "Back to Edit" transition (doesn't wipe out textarea input)
@@ -1439,72 +1520,13 @@ function backToEdit() {
 }
 
 // Step 2 Action Approved -> Step 3 (Creates Brief via API)
-// ---------------------------------------------------------------------------
-// Resume by Token (W3 fix) — recover session from a known brief token
-// ---------------------------------------------------------------------------
-async function handleResumeByToken() {
-  const tokenInput = elements.resumeTokenInput;
-  const token = tokenInput ? tokenInput.value.trim() : '';
-  if (!token) {
-    alert('Please paste a valid brief access token.');
-    return;
-  }
-
-  syncSessionInputs();
-  const userId = state.session.currentUserId;
-  if (!userId) {
-    alert('Enter your session user ID in Settings before resuming.');
-    elements.settingsPanel.classList.add('open');
-    elements.currentUserIdInput.focus();
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/${encodeURIComponent(token)}`, {
-      headers: { 'X-User-Id': userId }
-    });
-
-    if (res.status === 403) {
-      alert('Access denied — your user ID does not match this brief.');
-      return;
-    }
-    if (res.status === 404) {
-      alert('Brief not found — double-check the token.');
-      return;
-    }
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}`);
-    }
-
-    const brief = await res.json();
-
-    // Restore local state
-    state.currentBriefToken = token;
-    state.currentBrief = brief;
-    state.rawFeedback = brief.rawFeedback || '';
-    state.selectedCategory = brief.category || '';
-    state.selectedPriority = brief.priority || '';
-    localStorage.setItem('bustler_active_token', token);
-    localStorage.setItem('bustler_approved_brief', JSON.stringify(brief));
-
-    // Jump to tracking view
-    syncStep1UI();
-    changeStep(3);
-    startStep3Polling();
-    updateStep3Status();
-
-  } catch (err) {
-    console.error('[RESUME BY TOKEN ERROR]', err);
-    alert(`Could not resume brief: ${err.message}`);
-  }
-}
 
 async function approveBrief() {
   if (!state.currentBrief) return;
 
   syncSessionInputs();
-  const existingToken = state.currentBriefToken || localStorage.getItem('bustler_active_token');
-  const isRevisionLoop = Boolean(existingToken);
+  const isRevisionLoop = Boolean(state.isRevisionLoop && state.currentBriefToken);
+  const existingToken = state.currentBriefToken;
 
   const customerId = state.session.currentUserId;
   const providerId = state.session.assignedProviderId;
@@ -1572,6 +1594,12 @@ async function approveBrief() {
 
     // Save token locally for persistence on refresh
     localStorage.setItem('bustler_active_token', data.accessToken);
+    state.isRevisionLoop = false;
+
+    // Broadcast revision update to other tabs (provider portal)
+    if (syncChannel) {
+      syncChannel.postMessage({ type: 'BRIEF_UPDATED', token: data.accessToken });
+    }
 
   } catch (err) {
     console.error('[APPROVE BRIEF API ERROR]', err);
@@ -1584,6 +1612,7 @@ async function approveBrief() {
     ? "The existing provider link has been reused for a new revision cycle. Previous checklist progress was reset for the new round."
     : "The revision brief now has a unique access token. The backend will only return it to the linked customer or assigned provider.";
   
+  showToast(isRevisionLoop ? 'Revision cycle updated and sent to provider!' : 'Revision brief approved and dispatched to provider!', 'success', 'Brief Dispatched');
   triggerSuccessAnimation();
   changeStep(3);
   startStep3Polling();
@@ -1636,6 +1665,7 @@ function resetToStart() {
   state.currentBrief = null;
   state.rawFeedback = '';
   state.currentBriefToken = null;
+  state.isRevisionLoop = false;
   localStorage.removeItem('bustler_active_token');
   
   handleFeedbackInput();
@@ -1643,19 +1673,163 @@ function resetToStart() {
   syncStep1UI();
   changeStep(1);
 }
+// Interactive sliding tab backdrop helper (inspired by TabsSubtle)
+function initSlidingTabs() {
+  const group = document.getElementById('priority-buttons-group');
+  const pill = document.getElementById('priority-sliding-pill');
+  if (!group || !pill) return;
+
+  group.querySelectorAll('.priority-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', () => {
+      updateSlidingTabs(btn, true);
+    });
+    btn.addEventListener('mouseleave', () => {
+      const activeBtn = group.querySelector('.priority-btn.active');
+      if (activeBtn) {
+        updateSlidingTabs(activeBtn, false);
+      } else {
+        pill.style.opacity = '0';
+      }
+    });
+  });
+
+  // Re-position on window resize
+  window.addEventListener('resize', () => {
+    const activeBtn = group.querySelector('.priority-btn.active');
+    if (activeBtn) updateSlidingTabs(activeBtn, false);
+  });
+}
+
+function updateSlidingTabs(targetBtn, isHover = false) {
+  const group = document.getElementById('priority-buttons-group');
+  const pill = document.getElementById('priority-sliding-pill');
+  if (!group || !pill) return;
+
+  if (!targetBtn) {
+    pill.style.opacity = '0';
+    return;
+  }
+
+  const groupRect = group.getBoundingClientRect();
+  const btnRect = targetBtn.getBoundingClientRect();
+  const left = btnRect.left - groupRect.left;
+  const width = btnRect.width;
+
+  pill.style.transform = `translateX(${left}px)`;
+  pill.style.width = `${width}px`;
+  pill.style.opacity = isHover ? '0.6' : '1';
+}
+
+// ----------------------------------------------------
+// Custom Select-1 Component (shadcn / Base-UI style)
+// ----------------------------------------------------
+function initCustomSelect() {
+  const trigger = document.getElementById('custom-select-trigger');
+  const popup = document.getElementById('custom-select-popup');
+  const valueDisplay = document.getElementById('custom-select-value');
+  const items = document.querySelectorAll('.custom-select-item');
+  const nativeSelect = document.getElementById('field-select');
+
+  if (!trigger || !popup) return;
+
+  const togglePopup = (force) => {
+    const isCurrentlyOpen = popup.style.display !== 'none';
+    const nextState = typeof force === 'boolean' ? force : !isCurrentlyOpen;
+    popup.style.display = nextState ? 'block' : 'none';
+    trigger.setAttribute('aria-expanded', String(nextState));
+    trigger.setAttribute('data-popup-open', String(nextState));
+  };
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePopup();
+  });
+
+  items.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = item.getAttribute('data-value') || '';
+      const text = item.querySelector('.custom-select-text').innerText;
+      
+      // Update custom UI
+      items.forEach(i => {
+        i.classList.remove('active');
+        i.setAttribute('aria-selected', 'false');
+      });
+      item.classList.add('active');
+      item.setAttribute('aria-selected', 'true');
+      valueDisplay.innerText = text;
+
+      // Update state & native select
+      state.selectedCategory = val;
+      if (nativeSelect) {
+        nativeSelect.value = val;
+        nativeSelect.dispatchEvent(new Event('change'));
+      }
+      updateGenerateButtonState();
+      togglePopup(false);
+    });
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!trigger.contains(e.target) && !popup.contains(e.target)) {
+      togglePopup(false);
+    }
+  });
+
+  // Keyboard navigation
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      togglePopup(true);
+      const activeItem = popup.querySelector('.custom-select-item.active') || items[0];
+      if (activeItem) activeItem.focus();
+    } else if (e.key === 'Escape') {
+      togglePopup(false);
+    }
+  });
+}
 
 // Synchronizes the category select and priority buttons with state
 function syncStep1UI() {
-  elements.fieldSelect.value = state.selectedCategory || '';
+  const selectedCategory = state.selectedCategory || '';
+  elements.fieldSelect.value = selectedCategory;
+
+  const valueDisplay = document.getElementById('custom-select-value');
+  const items = document.querySelectorAll('.custom-select-item');
+  if (valueDisplay && items.length > 0) {
+    let foundText = 'Choose a field';
+    items.forEach(item => {
+      const val = item.getAttribute('data-value') || '';
+      if (val === selectedCategory) {
+        item.classList.add('active');
+        item.setAttribute('aria-selected', 'true');
+        foundText = item.querySelector('.custom-select-text').innerText;
+      } else {
+        item.classList.remove('active');
+        item.setAttribute('aria-selected', 'false');
+      }
+    });
+    valueDisplay.innerText = foundText;
+  }
   
+  let activeBtn = null;
   document.querySelectorAll('.priority-btn').forEach(btn => {
     if (btn.getAttribute('data-priority') === state.selectedPriority) {
       btn.classList.add('active');
+      activeBtn = btn;
     } else {
       btn.classList.remove('active');
     }
   });
   
+  if (activeBtn) {
+    requestAnimationFrame(() => updateSlidingTabs(activeBtn, false));
+  } else {
+    updateSlidingTabs(null);
+  }
+
   updateGenerateButtonState();
 }
 
@@ -1754,6 +1928,7 @@ function renderCompletedChecklist(briefData) {
 // Handles requesting a further revision loop (back to step 1)
 function handleRequestFurtherRevision() {
   stopStep3Polling();
+  state.isRevisionLoop = true;
   elements.feedbackInput.value = state.rawFeedback;
   handleFeedbackInput();
 
@@ -1778,6 +1953,13 @@ async function handleConcludeClose() {
         },
         body: JSON.stringify({ status: 'concluded' })
       });
+
+      localStorage.setItem('bustler_last_sync', String(Date.now()));
+
+      if (syncChannel) {
+        syncChannel.postMessage({ type: 'BRIEF_UPDATED', token });
+      }
+      showToast('Revision cycle concluded and finalized.', 'success', 'Task Concluded');
     } catch (err) {
       console.error('[CONCLUDE ERROR]', err);
     }
@@ -1804,6 +1986,18 @@ function detectPriorityFromFeedback(lowerText) {
   if (mediumSignals.some(signal => lowerText.includes(signal))) return 'Medium';
   return 'Not specified';
 }
+
+// Window focus / visibility listener for customer step 3
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.currentStep === 3) {
+    updateStep3Status();
+  }
+});
+window.addEventListener('focus', () => {
+  if (state.currentStep === 3) {
+    updateStep3Status();
+  }
+});
 
 // Start App
 window.addEventListener('DOMContentLoaded', init);

@@ -5,10 +5,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bustler Revision Assistant</title>
-  <!-- Google Fonts: Inter for native premium typography -->
+  <!-- Google Fonts: Inter, Nunito & Plus Jakarta Sans for native branding -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Nunito:wght@800;900&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+  <!-- Prevent dark mode flash -->
+  <script>
+    (function() {
+      try {
+        const saved = localStorage.getItem('bustler_theme');
+        if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <!-- External Style Sheet -->
   <link rel="stylesheet" href="style.css">
   <script src="bustler-context.js" defer></script>
@@ -28,23 +41,37 @@
     <header>
       <div class="brand">
         <div class="brand-logo" style="background: transparent; box-shadow: none; width: auto; height: auto;">
-          <!-- SVG B-Logo matching client branding -->
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M 6 2 H 11.5 A 5 5 0 0 1 16.5 7 A 5 5 0 0 1 11.5 12 H 5 V 3 A 1 1 0 0 1 6 2 Z"
-              fill="var(--logo-red)" />
-            <path d="M 5 12 H 12.5 A 5 5 0 0 1 17.5 17 A 5 5 0 0 1 12.5 22 H 6 A 1 1 0 0 1 5 21 V 12 Z"
-              fill="var(--brand-green)" />
+          <!-- SVG B-Logo matching original Bustler branding -->
+          <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 4 4 H 16.5 C 21.5 4 25 7.5 25 11.5 C 25 14.8 21.5 16 17.5 16 H 4 V 4 Z" fill="var(--logo-red)" />
+            <path d="M 4 16 H 22 C 27.5 16 30.5 19 30.5 23 C 30.5 27 27.5 30 22 30 H 4 V 16 Z" fill="var(--brand-green)" />
           </svg>
         </div>
-        <div class="brand-wordmark">Bustler<span style="color: var(--logo-red);">.</span></div>
+        <div class="brand-wordmark">BUST<span class="wordmark-teal">LE</span>R</div>
       </div>
 
       <div class="header-actions">
         <div class="status-badge" id="api-status-badge">
           <div class="status-dot" id="status-dot"></div>
-          <span id="status-text">Groq / Llama-3.3</span>
+          <span id="status-text">Bustler AI</span>
         </div>
-        <button class="settings-btn" id="toggle-settings" title="API Configuration">
+        <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark / Light Mode" aria-label="Toggle theme">
+          <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+        <button class="settings-btn" id="toggle-settings" title="Session Settings">
           <!-- Cog icon -->
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -59,34 +86,14 @@
     <!-- Settings Drawer -->
     <div class="settings-panel" id="settings-panel">
       <div class="settings-card">
-        <div class="settings-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-          Groq Integration Configuration
-        </div>
-        <div class="settings-row">
-          <label for="api-key-input">Groq API Key (server-side)</label>
-          <div class="input-with-action">
-            <input type="password" id="api-key-input" class="settings-input" placeholder="YOUR_GROK_API_KEY">
-            <button class="settings-save-btn" id="save-api-key">Save</button>
-          </div>
-        </div>
-        <div class="settings-checkbox-row">
-          <input type="checkbox" id="simulate-mode-checkbox">
-          <label for="simulate-mode-checkbox">Always simulate response locally (no API key required)</label>
-        </div>
-      </div>
-      <div class="settings-card settings-card-secondary">
         <div class="settings-title">Bustler Session Context</div>
         <div class="settings-row">
           <label for="current-user-id-input">Current session user ID</label>
           <input type="text" id="current-user-id-input" class="settings-input" placeholder="usr_customer_123">
         </div>
         <p class="settings-help-text">Bustler can inject this later through <code>window.BUSTLER_CONTEXT.currentUserId</code>.</p>
+        
+
       </div>
     </div>
 
@@ -118,28 +125,147 @@
            STEP 1: Feedback Input Form
            ==================================================== -->
       <section class="step-content active" id="step-1">
+        
+        <!-- Top Row: Half-Width Select Dropdown + Priority Selector -->
+        <div class="step1-top-row">
+          <!-- Left Column: Custom Select-1 Component -->
+          <div class="step1-col step1-field-col">
+            <label class="templates-label" for="custom-select-trigger" style="margin-bottom: 0;">Select the service field</label>
+            <div class="custom-select-wrapper" id="custom-select-wrapper">
+              <button type="button" class="custom-select-trigger" id="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                <span class="custom-select-value" id="custom-select-value">Choose a field</span>
+                <span class="custom-select-icon">
+                  <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M0.5 4.5L4 1.5L7.5 4.5" />
+                    <path d="M0.5 7.5L4 10.5L7.5 7.5" />
+                  </svg>
+                </span>
+              </button>
+
+              <!-- Custom Select-1 Popup Menu -->
+              <div class="custom-select-popup" id="custom-select-popup" role="listbox" style="display: none;">
+                <div class="custom-select-item active" data-value="" role="option" aria-selected="true">
+                  <span class="custom-select-indicator">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                      <path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" />
+                    </svg>
+                  </span>
+                  <span class="custom-select-text">Choose a field</span>
+                </div>
+                <div class="custom-select-item" data-value="2d modeling" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">2d modeling</span>
+                </div>
+                <div class="custom-select-item" data-value="3d modeling" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">3d modeling</span>
+                </div>
+                <div class="custom-select-item" data-value="adobe photoshop/after effect" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">adobe photoshop/after effect</span>
+                </div>
+                <div class="custom-select-item" data-value="application servicing" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">application servicing</span>
+                </div>
+                <div class="custom-select-item" data-value="application development" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">application development</span>
+                </div>
+                <div class="custom-select-item" data-value="cloude support ans system administrate" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">cloude support ans system administrate</span>
+                </div>
+                <div class="custom-select-item" data-value="craft & art work" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">craft & art work</span>
+                </div>
+                <div class="custom-select-item" data-value="designing" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">designing</span>
+                </div>
+                <div class="custom-select-item" data-value="digital creator" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">digital creator</span>
+                </div>
+                <div class="custom-select-item" data-value="digital marketing" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">digital marketing</span>
+                </div>
+                <div class="custom-select-item" data-value="industrial & metal work" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">industrial & metal work</span>
+                </div>
+                <div class="custom-select-item" data-value="it & networking/system security" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">it & networking/system security</span>
+                </div>
+                <div class="custom-select-item" data-value="marketing" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">marketing</span>
+                </div>
+                <div class="custom-select-item" data-value="photography" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">photography</span>
+                </div>
+                <div class="custom-select-item" data-value="videography" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">videography</span>
+                </div>
+                <div class="custom-select-item" data-value="website development" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">website development</span>
+                </div>
+                <div class="custom-select-item" data-value="writing" role="option">
+                  <span class="custom-select-indicator"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M9.1603 1.12218C9.50684 1.34873 9.60427 1.81354 9.37792 2.16038L5.13603 8.66012C5.01614 8.8438 4.82192 8.96576 4.60451 8.99384C4.3871 9.02194 4.1683 8.95335 4.00574 8.80615L1.24664 6.30769C0.939709 6.02975 0.916013 5.55541 1.19372 5.24822C1.47142 4.94102 1.94536 4.91731 2.2523 5.19524L4.36085 7.10461L8.12299 1.33999C8.34934 0.993152 8.81376 0.895638 9.1603 1.12218Z" /></svg></span>
+                  <span class="custom-select-text">writing</span>
+                </div>
+              </div>
+
+              <!-- Fallback native select for backend syncing -->
+              <select id="field-select" class="field-select" style="display: none;">
+                <option value="">Choose a field</option>
+                <option value="2d modeling">2d modeling</option>
+                <option value="3d modeling">3d modeling</option>
+                <option value="adobe photoshop/after effect">adobe photoshop/after effect</option>
+                <option value="application servicing">application servicing</option>
+                <option value="application development">application development</option>
+                <option value="cloude support ans system administrate">cloude support ans system administrate</option>
+                <option value="craft & art work">craft & art work</option>
+                <option value="designing">designing</option>
+                <option value="digital creator">digital creator</option>
+                <option value="digital marketing">digital marketing</option>
+                <option value="industrial & metal work">industrial & metal work</option>
+                <option value="it & networking/system security">it & networking/system security</option>
+                <option value="marketing">marketing</option>
+                <option value="photography">photography</option>
+                <option value="videography">videography</option>
+                <option value="website development">website development</option>
+                <option value="writing">writing</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Right Column: Priority Selector (moved beside dropdown) -->
+          <div class="step1-col step1-priority-col">
+            <label class="templates-label" style="margin-bottom: 0;">Select Priority</label>
+            <div class="priority-buttons-group" id="priority-buttons-group">
+              <div class="sliding-tab-pill" id="priority-sliding-pill"></div>
+              <button type="button" class="priority-btn" id="priority-low" data-priority="Low">
+                <span class="priority-dot priority-dot-low"></span> Low
+              </button>
+              <button type="button" class="priority-btn" id="priority-middle" data-priority="Medium">
+                <span class="priority-dot priority-dot-medium"></span> Middle
+              </button>
+              <button type="button" class="priority-btn" id="priority-high" data-priority="High">
+                <span class="priority-dot priority-dot-high"></span> High
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feedback Textarea -->
         <div class="feedback-input-wrapper">
-          <label for="field-select" class="templates-label" style="margin-bottom: 0;">Select the service field</label>
-          <select id="field-select" class="field-select">
-            <option value="">Choose a field</option>
-            <option value="2d modeling">2d modeling</option>
-            <option value="3d modeling">3d modeling</option>
-            <option value="adobe photoshop/after effect">adobe photoshop/after effect</option>
-            <option value="application servicing">application servicing</option>
-            <option value="application development">application development</option>
-            <option value="cloude support ans system administrate">cloude support ans system administrate</option>
-            <option value="craft & art work">craft & art work</option>
-            <option value="designing">designing</option>
-            <option value="digital creator">digital creator</option>
-            <option value="digital marketing">digital marketing</option>
-            <option value="industrial & metal work">industrial & metal work</option>
-            <option value="it & networking/system security">it & networking/system security</option>
-            <option value="marketing">marketing</option>
-            <option value="photography">photography</option>
-            <option value="videography">videography</option>
-            <option value="website development">website development</option>
-            <option value="writing">writing</option>
-          </select>
           <label for="feedback-input" class="templates-label" style="margin-bottom: 0;">Type in Feedback</label>
           <textarea id="feedback-input" class="feedback-textarea"
             placeholder="e.g. The banner looks outdated, can we try something more modern with our brand colors?"></textarea>
@@ -165,21 +291,6 @@
           </div>
         </div>
 
-        <div class="priority-section">
-          <div class="templates-label">Select Priority</div>
-          <div class="priority-buttons-group">
-            <button class="priority-btn" id="priority-low" data-priority="Low">
-              <span class="priority-dot priority-dot-low"></span> Low
-            </button>
-            <button class="priority-btn" id="priority-middle" data-priority="Medium">
-              <span class="priority-dot priority-dot-medium"></span> Middle
-            </button>
-            <button class="priority-btn" id="priority-high" data-priority="High">
-              <span class="priority-dot priority-dot-high"></span> High
-            </button>
-          </div>
-        </div>
-
         <div class="templates-section">
           <div class="templates-label">Quick Test</div>
           <div class="templates-grid">
@@ -189,15 +300,6 @@
           </div>
         </div>
 
-        <!-- Resume by Token (W3 fix: session recovery when localStorage is cleared) -->
-        <div class="templates-section" id="resume-token-section">
-          <div class="templates-label">Resume Existing Brief</div>
-          <p class="assignment-subtitle">Lost your session? Paste your brief token below to resume tracking.</p>
-          <div class="input-with-action" style="max-width: 480px;">
-            <input type="text" id="resume-token-input" class="text-input" placeholder="Paste your brief access token here">
-            <button class="btn btn-secondary" id="resume-token-btn" style="padding: 8px 16px; font-size: 13px; width: auto; white-space: nowrap;">Resume</button>
-          </div>
-        </div>
 
         <div class="action-row">
           <button class="btn btn-primary" id="generate-brief-btn" disabled>
@@ -211,11 +313,48 @@
            ==================================================== -->
   <section class="step-content" id="step-2">
 
-    <!-- Loading State Spinner -->
-    <div class="spinner-card" id="brief-loading-card">
-      <div class="spinner-ring"></div>
-      <p class="spinner-text">Analyzing feedback...</p>
-      <p class="spinner-subtext">Bustler Assistant is structuring the tasks and calculating estimates.</p>
+    <!-- Loading State Skeleton Card -->
+    <div class="skeleton-brief-card" id="brief-loading-card">
+      <div class="skeleton-header-info">
+        <div class="spinner-mini"></div>
+        <div>
+          <h3 class="skeleton-title-text">Structuring Revision Brief...</h3>
+          <p class="skeleton-subtitle-text">Analyzing your feedback into clear, actionable specifications</p>
+        </div>
+      </div>
+
+      <div class="skeleton-doc">
+        <div class="skeleton-doc-header">
+          <div class="skeleton-bar w-40 h-6"></div>
+          <div class="skeleton-badges">
+            <div class="skeleton-pill w-24 h-6"></div>
+            <div class="skeleton-pill w-20 h-6"></div>
+          </div>
+        </div>
+        
+        <div class="skeleton-section">
+          <div class="skeleton-bar w-32 h-4 mb-2"></div>
+          <div class="skeleton-box h-16"></div>
+        </div>
+
+        <div class="skeleton-section">
+          <div class="skeleton-bar w-36 h-4 mb-3"></div>
+          <div class="skeleton-list">
+            <div class="skeleton-item">
+              <div class="skeleton-circle"></div>
+              <div class="skeleton-bar flex-1 h-5"></div>
+            </div>
+            <div class="skeleton-item">
+              <div class="skeleton-circle"></div>
+              <div class="skeleton-bar w-3-4 h-5"></div>
+            </div>
+            <div class="skeleton-item">
+              <div class="skeleton-circle"></div>
+              <div class="skeleton-bar w-1-2 h-5"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Error State Display -->
@@ -228,12 +367,10 @@
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
       </div>
-      <h4 class="error-title">API Connection Request Failed</h4>
-      <p class="error-message" id="error-message-text">We couldn't connect to the Grok API service. This can occur
-        due to an expired token, network issues, or a wrong host configuration.</p>
+      <h4 class="error-title">Brief Generation Request Failed</h4>
+      <p class="error-message" id="error-message-text">We couldn't connect to the backend service. This can occur
+        due to network issues or if the backend server is not running.</p>
       <div style="display: flex; gap: 12px; margin-top: 8px;">
-        <button class="btn btn-secondary" id="error-configure-key"
-          style="padding: 8px 16px; font-size: 13px; width: auto;">Edit API Key</button>
         <button class="btn btn-primary" id="error-simulate-btn"
           style="padding: 8px 16px; font-size: 13px; width: auto;">Simulate with Mock Data</button>
       </div>
@@ -319,9 +456,7 @@
             <div class="badge-grid">
               <div class="badge-wrapper" id="category-badge-wrapper">
                 <span class="badge-label">Category</span>
-                <span class="badge" id="brief-category"
-                  style="background: var(--brand-green-tint); color: var(--brand-green); border: 1px solid rgba(0, 102, 126, 0.15);">Software
-                  / App Development</span>
+                <span class="badge category-badge" id="brief-category">Software / App Development</span>
               </div>
               <div class="badge-wrapper">
                 <span class="badge-label">Priority</span>
@@ -354,7 +489,7 @@
                 <line x1="16" y1="17" x2="8" y2="17" />
                 <polyline points="10 9 9 9 8 9" />
               </svg>
-              Actionable Checklist
+              Checklist Items
             </div>
             <div class="checklist-list" id="brief-changes-list">
               <!-- Checklist Items Dynamic insertion -->
@@ -522,6 +657,9 @@
   </footer>
 
   </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
 </body>
 

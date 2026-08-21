@@ -9,6 +9,9 @@
  *   - Production / Cloud Run: Cloud Firestore
  */
 
+// Load .env before anything reads process.env
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
@@ -454,7 +457,7 @@ app.patch('/api/briefs/:token/checklist', requireUserId, async (req, res) => {
 // Groq API Proxy — keeps the API key server-side only
 // ---------------------------------------------------------------------------
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'openai/gpt-oss-20b';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 async function callGroq(systemPrompt, userContent) {
@@ -468,8 +471,8 @@ async function callGroq(systemPrompt, userContent) {
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userContent }
     ],
-    response_format: { type: 'json_object' },
-    temperature: 0.3
+    temperature: 0.3,
+    max_tokens: 1024
   };
 
   const response = await fetch(GROQ_URL, {
